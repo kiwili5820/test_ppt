@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>소프트웨어 활용 사례 퍼즐</title>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        :root {
+            --bg-pastel: #fdf2f0; 
+            --main-red: #EC6868;  
+            --label-brown: #936460; 
+            --correct-high: rgba(130, 255, 130, 0.6); 
+            --drag-high: rgba(255, 230, 0, 0.6);      
+            --wrong-high: rgba(255, 100, 100, 0.7);    
+            --point-pink: #BF0094;
+        }
+
+        body { 
+            font-family: 'Pretendard', sans-serif; 
+            background-color: var(--bg-pastel); 
+            margin: 0; padding: 0;
+            display: flex; flex-direction: column; align-items: center; 
+            overflow-x: hidden;
+            -webkit-touch-callout: none;
+        }
+        
+        .tabs-wrapper {
+            width: 100%;
+            background-color: var(--bg-pastel);
+            border-bottom: 4px solid var(--main-red);
+            display: flex;
+            justify-content: flex-start;
+            padding-top: 15px;
+            padding-left: 15px;
+            box-sizing: border-box;
+        }
+
+        body.student-mode .tabs-wrapper { display: none; }
+
+        .tab { 
+            padding: 10px 30px;
+            cursor: pointer; 
+            border-radius: 20px 20px 0 0; 
+            background: white; 
+            font-size: 1.2rem; 
+            font-weight: 800; 
+            color: black;
+            border: none;
+            margin-right: 5px;
+        }
+        .tab.active { background: var(--main-red); color: white; }
+
+        .tab-content { 
+            display: none; 
+            width: 100%; 
+            max-width: 1300px;
+            background: var(--bg-pastel); 
+            padding: 20px; 
+            box-sizing: border-box; 
+        }
+        .tab-content.active { display: block; }
+
+        h1 { color: #1a4a9a; font-size: 2rem; margin: 10px 0; text-align: center; }
+        .description { font-size: 1rem; line-height: 1.5; margin-bottom: 25px; text-align: center; word-break: keep-all; }
+
+        .game-container { 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            gap: 30px; 
+        }
+
+        .quiz-list { list-style: none; padding: 0; margin: 0; width: 100%; max-width: 480px; }
+        .quiz-item { display: flex; align-items: center; justify-content: flex-start; margin-bottom: 12px; height: 50px; }
+        .category { background: var(--label-brown); color: white; padding: 6px 0; border-radius: 25px; font-size: 1rem; width: 90px; text-align: center; font-weight: 800; margin-right: 15px; flex-shrink: 0; }
+        .hint-text { font-size: 1.2rem; font-weight: 700; flex-grow: 1; white-space: nowrap; }
+        .tip-btn { background: none; border: none; padding: 0; cursor: pointer; width: 90px; flex-shrink: 0; display: flex; align-items: center; }
+        .tip-btn img { width: 100%; height: auto; }
+
+        .puzzle-wrapper { display: flex; flex-direction: column; align-items: flex-end; width: 100%; max-width: 100vw; }
+        .puzzle-board { 
+            display: grid; 
+            grid-template-columns: repeat(12, 1fr); 
+            width: 95vw; 
+            max-width: 600px;
+            aspect-ratio: 1 / 1; 
+            gap: 2px; 
+            background: #dccbc8; 
+            border: 4px solid #dccbc8; 
+            user-select: none; 
+            touch-action: none; 
+            margin: 0 auto 15px auto;
+        }
+        .cell { 
+            background: white; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-weight: 800; 
+            font-size: min(4.5vw, 1.8rem); 
+            color: black; 
+            cursor: pointer; 
+        }
+
+        .cell.highlight { background-color: var(--drag-high); }
+        .cell.correct { background-color: var(--correct-high); }
+        .cell.wrong { background-color: var(--wrong-high); animation: blink 0.2s 3; }
+        .cell.tip-blink { animation: tip-flash 0.5s infinite alternate; border: 3px solid var(--point-pink); z-index: 5; }
+
+        /* 되돌리기 버튼 스타일 (모바일 기본) */
+        #reset-btn { 
+            background: none; border: none; padding: 0; 
+            cursor: pointer; display: none; z-index: 100; 
+            align-self: flex-end; /* 퍼즐판 오른쪽 끝 정렬 */
+        }
+        #reset-btn img { width: 120px; height: auto; } /* 모바일에서는 여전히 자동 조정 */
+
+        #qrcode { background: white; padding: 15px; border-radius: 15px; display: inline-block; }
+        #qrcode canvas, #qrcode img { width: 300px !important; height: 300px !important; }
+
+        /* [PC 화면 최적화: 1024px 이상] */
+        @media (min-width: 1024px) {
+            h1 { font-size: 3.5rem; text-align: left; margin-bottom: 20px; }
+            .description { font-size: 1.6rem; text-align: left; margin-bottom: 50px; }
+            
+            .game-container { flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 60px; }
+            
+            .quiz-list { width: 550px; max-width: none; }
+            .quiz-item { margin-bottom: 25px; height: 65px; }
+            .category { font-size: 1.6rem; width: 130px; padding: 8px 0; }
+            .hint-text { font-size: 2.2rem; margin-right: 20px; }
+            .tip-btn { width: 110px; }
+
+            .puzzle-board { width: 780px; max-width: none; gap: 5px; border-width: 6px; margin: 0 0 20px 0; }
+            .cell { font-size: 2.5rem; }
+            .tab { font-size: 1.8rem; padding: 15px 80px; border-radius: 40px 40px 0 0; }
+            .tabs-wrapper { border-bottom-width: 8px; padding-top: 30px; padding-left: 40px; }
+            
+            /* PC에서 되돌리기 버튼을 원본 크기로 표시 */
+            #reset-btn img { 
+                width: auto !important; /* 너비 제한 해제 */
+                height: auto !important; /* 높이 제한 해제 */
+                max-width: none; 
+            }
+        }
+
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        @keyframes tip-flash { from { background-color: white; } to { background-color: #ffdafc; } }
+    </style>
+</head>
+<body>
+
+    <div class="tabs-wrapper">
+        <div class="tab active" onclick="showTab('qr-tab')">QR</div>
+        <div class="tab" onclick="showTab('puzzle-tab')">퍼즐</div>
+    </div>
+
+    <div id="qr-tab" class="tab-content active" style="text-align: center;">
+        <h2 style="font-size: 2.5rem; margin-top: 50px;">학생 접속용 QR 코드</h2>
+        <div id="qrcode" style="margin: 30px auto;"></div>
+        <div style="margin-top: 40px;">
+            <button class="tab" style="background: var(--main-red); color: white; border-radius: 30px; padding: 12px 50px;" onclick="showTab('puzzle-tab')">퍼즐 시작하기</button>
+        </div>
+    </div>
+
+    <div id="puzzle-tab" class="tab-content">
+        <h1>소프트웨어 활용 사례 퍼즐</h1>
+        <p class="description">
+            분야별 <strong>초성 힌트</strong>를 보고 단어를 퍼즐에서 찾아 <strong>첫 글자부터</strong> 드래그하세요.
+        </p>
+
+        <div class="game-container">
+            <ul class="quiz-list" id="quiz-list"></ul>
+            <div class="puzzle-wrapper">
+                <div class="puzzle-board" id="board"></div>
+                <button id="reset-btn" onclick="resetGame()">
+                    <img src="img/retry.png" alt="되돌리기">
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const gridData = [
+            ['타','크','행','육','메','디','지','털','교','과','서','코'],
+            ['점','마','뮬','약','키','드','파','동','지','지','교','약'],
+            ['초','자','참','파','무','오','스','버','타','메','참','추'],
+            ['팜','트','마','스','인','타','스','션','키','론','코','크'],
+            ['약','자','스','드','상','교','카','크','챗','지','교','지'],
+            ['튜','오','타','자','점','션','튜','참','크','봇','타','미'],
+            ['어','크','션','팜','율','스','이','차','여','미','디','디'],
+            ['교','드','타','론','크','주','주','레','감','교','감','어'],
+            ['털','파','론','차','코','이','행','무','뮬','약','호','아'],
+            ['드','물','행','봇','약','감','크','자','초','시','봇','트'],
+            ['과','드','여','참','파','아','파','호','동','크','카','호'],
+            ['행','하','행','파','육','하','스','타','버','차','트','론']
+        ];
+
+        const finalWords = [
+            { id:0, cat:'산업', chosung:'드론', answer:'드론', pos: [[7,1],[8,2]], isExample: true },
+            { id:1, cat:'소통', chosung:'ㅊㅂ', answer:'챗봇', pos: [[4,8],[5,9]] },
+            { id:2, cat:'경제', chosung:'ㅋㅇㅅㅋ', answer:'키오스크', pos: [[1,4],[2,5],[3,6],[4,7]] },
+            { id:3, cat:'경제', chosung:'ㅁㅇㅅㅈ', answer:'무인상점', pos: [[2,4],[3,4],[4,4],[5,4]] },
+            { id:4, cat:'농업', chosung:'ㅅㅁㅌㅍ', answer:'스마트팜', pos: [[3,3],[3,2],[3,1],[3,0]] },
+            { id:5, cat:'문화', chosung:'ㅁㅌㅂㅅ', answer:'메타버스', pos: [[2,9],[2,8],[2,7],[2,6]] },
+            { id:6, cat:'사회', chosung:'ㅅㅁㄹㅇㅅ', answer:'시뮬레이션', pos: [[9,9],[8,8],[7,7],[6,6],[5,5]] },
+            { id:7, cat:'예술', chosung:'ㅁㄷㅇㅇㅌ', answer:'미디어아트', pos: [[5,11],[6,11],[7,11],[8,11],[9,11]] },
+            { id:8, cat:'교육', chosung:'ㄷㅈㅌㄱㄱㅅ', answer:'디지털교과서', pos: [[0,5],[0,6],[0,7],[0,8],[0,9],[0,10]] },
+            { id:9, cat:'교통', chosung:'ㅈㅇㅈㅎㅈㄷㅊ', answer:'자율주행자동차', pos: [[5,3],[6,4],[7,5],[8,6],[9,7],[10,8],[11,9]] }
+        ];
+
+        let isDragging = false;
+        let startCell = null;
+        let selectedCells = [];
+        let foundCount = 1;
+
+        function generateQR() {
+            const currentUrl = window.location.href.split('?')[0]; 
+            const studentUrl = currentUrl + "?mode=student";
+            document.getElementById("qrcode").innerHTML = "";
+            new QRCode(document.getElementById("qrcode"), {
+                text: studentUrl,
+                width: 300,
+                height: 300
+            });
+        }
+
+        function checkStudentMode() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('mode') === 'student') {
+                document.body.classList.add('student-mode');
+                showTab('puzzle-tab');
+            } else {
+                generateQR();
+            }
+        }
+
+        function init() {
+            checkStudentMode();
+            const listEl = document.getElementById('quiz-list');
+            const boardEl = document.getElementById('board');
+            listEl.innerHTML = '';
+            boardEl.innerHTML = '';
+
+            finalWords.forEach(w => {
+                const li = document.createElement('li');
+                li.className = 'quiz-item' + (w.isExample ? ' completed' : '');
+                li.id = `quiz-${w.id}`;
+                li.innerHTML = `
+                    <div class="category">${w.cat}</div>
+                    <div class="hint-text">${w.isExample ? '✔ ' + w.answer : w.chosung}</div>
+                    ${w.isExample ? '' : `<button class="tip-btn" onclick="showTip(${w.id})"><img src="img/tip.png" alt="TIP"></button>`}
+                `;
+                listEl.appendChild(li);
+            });
+
+            for(let r=0; r<12; r++) {
+                for(let c=0; c<12; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.textContent = gridData[r][c];
+                    cell.dataset.r = r; cell.dataset.c = c;
+                    if(finalWords[0].pos.some(p => p[0]===r && p[1]===c)) cell.classList.add('correct');
+                    cell.addEventListener('mousedown', (e) => onStart(r, c));
+                    cell.addEventListener('mouseover', () => onMove(r, c));
+                    cell.addEventListener('touchstart', (e) => {
+                        const t = e.touches[0];
+                        const target = document.elementFromPoint(t.clientX, t.clientY);
+                        if(target?.classList.contains('cell')) onStart(parseInt(target.dataset.r), parseInt(target.dataset.c));
+                    }, {passive: false});
+                    cell.addEventListener('touchmove', (e) => {
+                        const t = e.touches[0];
+                        const target = document.elementFromPoint(t.clientX, t.clientY);
+                        if(target?.classList.contains('cell')) onMove(parseInt(target.dataset.r), parseInt(target.dataset.c));
+                    }, {passive: false});
+                    boardEl.appendChild(cell);
+                }
+            }
+        }
+
+        function resetGame() { foundCount = 1; document.getElementById('reset-btn').style.display = 'none'; init(); }
+
+        function getLinePath(r1, c1, r2, c2) {
+            const cells = [];
+            const dr = r2 - r1; const dc = c2 - c1;
+            const steps = Math.max(Math.abs(dr), Math.abs(dc));
+            if (steps === 0) return [[r1, c1]];
+            const unitR = dr === 0 ? 0 : dr / Math.abs(dr);
+            const unitC = dc === 0 ? 0 : dc / Math.abs(dc);
+            if (dr === 0 || dc === 0 || Math.abs(dr) === Math.abs(dc)) {
+                for (let i = 0; i <= steps; i++) {
+                    cells.push([r1 + (i * unitR), c1 + (i * unitC)]);
+                }
+            }
+            return cells;
+        }
+
+        function onStart(r, c) { isDragging = true; startCell = {r, c}; selectedCells = [[r, c]]; updateHighlight(); }
+        function onMove(r, c) { if(!isDragging) return; selectedCells = getLinePath(startCell.r, startCell.c, r, c); updateHighlight(); }
+        function onEnd() { if(!isDragging) return; isDragging = false; checkAnswer(); }
+
+        function updateHighlight() {
+            document.querySelectorAll('.cell').forEach(el => el.classList.remove('highlight'));
+            selectedCells.forEach(([r, c]) => document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`)?.classList.add('highlight'));
+        }
+
+        function checkAnswer() {
+            if (selectedCells.length < 2) { selectedCells = []; updateHighlight(); return; }
+            const selStr = selectedCells.map(([r,c]) => `${r},${c}`).join('|');
+            const word = finalWords.find(w => {
+                if(w.isExample) return false;
+                const p = w.pos.map(([pr, pc]) => `${pr},${pc}`).join('|');
+                return selStr === p; 
+            });
+
+            if(word) {
+                selectedCells.forEach(([r, c]) => document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`).classList.add('correct'));
+                const item = document.getElementById(`quiz-${word.id}`);
+                item.classList.add('completed');
+                item.querySelector('.hint-text').textContent = "✔ " + word.answer;
+                item.querySelector('.tip-btn')?.remove();
+                foundCount++;
+                if(foundCount === finalWords.length) {
+                    confetti({ particleCount: 200, spread: 80, origin: { y: 0.6 }, scalar: 3 });
+                    document.getElementById('reset-btn').style.display = 'block';
+                }
+            } else {
+                const temp = [...selectedCells];
+                temp.forEach(([r, c]) => document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`)?.classList.add('wrong'));
+                setTimeout(() => temp.forEach(([r, c]) => document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`)?.classList.remove('wrong')), 600);
+            }
+            selectedCells = []; updateHighlight();
+        }
+
+        function showTip(id) {
+            const w = finalWords.find(x => x.id === id);
+            const el = document.querySelector(`.cell[data-r="${w.pos[0][0]}"][data-c="${w.pos[0][1]}"]`);
+            el.classList.add('tip-blink');
+            setTimeout(() => el.classList.remove('tip-blink'), 3000);
+        }
+
+        function showTab(id) {
+            document.querySelectorAll('.tab, .tab-content').forEach(el => el.classList.remove('active'));
+            const tabBtn = document.querySelector(`.tab[onclick="showTab('${id}')"]`);
+            if (tabBtn) tabBtn.classList.add('active');
+            const content = document.getElementById(id);
+            if (content) content.classList.add('active');
+        }
+
+        window.addEventListener('mouseup', onEnd);
+        window.addEventListener('touchend', onEnd);
+        init();
+    </script>
+</body>
+</html>
